@@ -430,9 +430,10 @@ const MyVisitor = {
   }
 };
 ```
-
+如果必要的话,你可以对多个访问者节点使用同一个函数，函数命名要以斜杆为分割，如`Identifier|MemberExpression`来处理多个不一样类型的节点。
 If necessary, you can also apply the same function for multiple visitor nodes by separating them with a `|` in the method name as a string like `Identifier|MemberExpression`.
 
+这里有个例子，[flow-comments](https://github.com/babel/babel/blob/2b6ff53459d97218b0cf16f8a51c14a165db1fd2/packages/babel-plugin-transform-flow-comments/src/index.js#L47) plugin
 Example usage in the [flow-comments](https://github.com/babel/babel/blob/2b6ff53459d97218b0cf16f8a51c14a165db1fd2/packages/babel-plugin-transform-flow-comments/src/index.js#L47) plugin
 
 ```js
@@ -440,7 +441,7 @@ const MyVisitor = {
   "ExportNamedDeclaration|Flow"(path) {}
 };
 ```
-
+您还可以使用别名作为访问者节点。
 You can also use aliases as visitor nodes (as defined in [babel-types](https://github.com/babel/babel/tree/master/packages/babel-types/src/definitions)).
 
 For example,
@@ -455,10 +456,13 @@ const MyVisitor = {
 
 ### <a id="toc-paths"></a>Paths（路径）
 
+一个ast树通常存在很多节点，但是节点如何关联其他节点呢？我们可以有一个超大的可变对象，并且你可以操作和完全访问它，或者，我们可以用**Paths**来简化这个过程。
 An AST generally has many Nodes, but how do Nodes relate to one another? We could have one giant mutable object that you manipulate and have full access to, or we can simplify this with **Paths**.
 
+**Path**是一个对象代表了两个节点的联系。
 A **Path** is an object representation of the link between two nodes.
 
+举个例子，如果我们拿到下面的节点以及它的子节点：
 For example if we take the following node and its child:
 
 ```js
@@ -472,6 +476,7 @@ For example if we take the following node and its child:
 }
 ```
 
+并且把子节点`Identifier`描述成一个path对象，它看起来就像如下：
 And represent the child `Identifier` as a path, it looks something like this:
 
 ```js
@@ -488,6 +493,7 @@ And represent the child `Identifier` as a path, it looks something like this:
 }
 ```
 
+它也包含以下元数据
 It also has additional metadata about the path:
 
 ```js
@@ -516,12 +522,15 @@ It also has additional metadata about the path:
 }
 ```
 
+以及包含了大量的方法关于adding, updating, moving, 和 removing节点，后面我们将会介绍它们。
 As well as tons and tons of methods related to adding, updating, moving, and removing nodes, but we'll get into those later.
 
+在某种意义上，paths对于节点在ast树里面的位置以及一系列关于节点的信息都是响应式的。任何时候你调用一个方法编辑ast树，整颗树的信息会动态改变。babel为你管理好这些东西，使得操作节点变的简单无状态。
 In a sense, paths are a **reactive** representation of a node's position in the tree and all sorts of information about the node. Whenever you call a method that modifies the tree, this information is updated. Babel manages all of this for you to make working with nodes easy and as stateless as possible.
 
-#### <a id="toc-paths-in-visitors"></a>Paths in Visitors（存在于访问者中的路径）
+#### <a id="toc-paths-in-visitors"></a>Paths in Visitors（访问者里面的路径）
 
+当一个visitor里面存在一个`Identifier()`方法时，你实际上是在访问一个path对象而不是一个node。这种方式下你主要操作一个节点的响应式代表，而不是一个节点本身。
 When you have a visitor that has a `Identifier()` method, you're actually visiting the path instead of the node. This way you are mostly working with the reactive representation of a node instead of the node itself.
 
 ```js
@@ -544,8 +553,10 @@ Visiting: c
 
 ### <a id="toc-state"></a>State（状态）
 
+状态是ast转换的天敌。state每次都会影响到你并且你对state的想法每次都会因为一些你不考虑的语法儿使你出现错误。
 State is the enemy of AST transformation. State will bite you over and over again and your assumptions about state will almost always be proven wrong by some syntax that you didn't consider.
 
+看下下面的代码：
 Take the following code:
 
 ```js
@@ -554,6 +565,7 @@ function square(n) {
 }
 ```
 
+让我们写一个hacky vistor，这个vistor主要是把`n` 重命名为`x`。
 Let's write a quick hacky visitor that will rename `n` to `x`.
 
 ```js
@@ -574,6 +586,7 @@ const MyVisitor = {
 };
 ```
 
+这可能适用于上面的代码，但我们可以轻松地通过这样做：
 This might work for the above code, but we can easily break that by doing this:
 
 ```js
@@ -583,6 +596,7 @@ function square(n) {
 n;
 ```
 
+更好的方法我们可以通过递归。让我们像克里斯托弗·诺兰电影一样来把一个新的vistor加入一个vistor里面。
 The better way to deal with this is recursion. So let's make like a Christopher Nolan film and put a visitor inside of a visitor.
 
 ```js
@@ -604,11 +618,12 @@ const MyVisitor = {
   }
 };
 ```
-
+当然，这是人为的例子，但是我它很好的示例了如何从你的visitor里面消除全局state。
 Of course, this is a contrived example but it demonstrates how to eliminate global state from your visitors.
 
 ### <a id="toc-scopes"></a>Scopes（作用域）
 
+接下来让我们介绍一下[**scope**](https://en.wikipedia.org/wiki/Scope_(computer_science))的概念。javascript存在[lexical scoping](https://en.wikipedia.org/wiki/Scope_(computer_science)#Lexical_scoping_vs._dynamic_scoping)，它是一个树结构，这个树结构是由每个嵌套函数块生成的。
 Next let's introduce the concept of a [**scope**](https://en.wikipedia.org/wiki/Scope_(computer_science)). JavaScript has [lexical scoping](https://en.wikipedia.org/wiki/Scope_(computer_science)#Lexical_scoping_vs._dynamic_scoping), which is a tree structure where blocks create new scope.
 
 ```js
@@ -623,6 +638,7 @@ function scopeOne() {
 }
 ```
 
+任何时候你创建一个javascript引用，是否通过variable, function, class, param, import, label定义，它都属于当前scope。
 Whenever you create a reference in JavaScript, whether that be by a variable, function, class, param, import, label, etc., it belongs to the current scope.
 
 ```js
@@ -637,6 +653,7 @@ function scopeOne() {
 }
 ```
 
+深层的scope里面的代码可能使用高层的scope的引用。
 Code within a deeper scope may use a reference from a higher scope.
 
 ```js
@@ -649,6 +666,7 @@ function scopeOne() {
 }
 ```
 
+一个浅层scope可能创建一个同名的引用而不是去修改同名的。
 A lower scope might also create a reference of the same name without modifying it.
 
 ```js
@@ -661,8 +679,10 @@ function scopeOne() {
 }
 ```
 
+当编写一个transform时，我们需要考虑到scope。我们需要保证我们不会破坏当前的代码当我们修改它们时。
 When writing a transform, we want to be wary of scope. We need to make sure we don't break existing code while modifying different parts of it.
 
+我们可能希望添加新的引用并且
 We may want to add new references and make sure they don't collide with existing ones. Or maybe we just want to find where a variable is referenced. We want to be able to track these references within a given scope.
 
 A scope can be represented as:
